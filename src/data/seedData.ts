@@ -1,7 +1,7 @@
 import { Subject, Module, Topic, Exam, StudyTask, DailyHabit } from '../types';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, startOfDay, differenceInCalendarDays } from 'date-fns';
 
-const startDate = parseISO('2026-10-12'); // Today / start date
+const today = startOfDay(new Date()); // Dynamic current date (study starts from today!)
 const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
 
 export const INITIAL_SUBJECTS: Subject[] = [
@@ -242,8 +242,8 @@ export const INITIAL_EXAMS: Exam[] = [
     subjectId: 'sub-os',
     title: 'Operating Systems (BACSE106)',
     examDate: '2026-11-16', // November 16
-    targetFinishDate: '2026-11-12', // Finished 4 days prior
-    revisionDaysBuffer: 4,
+    targetFinishDate: '2026-11-13', // Finished 3 days prior for mock drill
+    revisionDaysBuffer: 3,
     priority: 'high',
   },
   {
@@ -251,8 +251,8 @@ export const INITIAL_EXAMS: Exam[] = [
     subjectId: 'sub-moc',
     title: 'Models of Computation (BACSE201)',
     examDate: '2026-11-18', // November 18
-    targetFinishDate: '2026-11-13',
-    revisionDaysBuffer: 5,
+    targetFinishDate: '2026-11-14',
+    revisionDaysBuffer: 4,
     priority: 'high',
   },
   {
@@ -260,8 +260,8 @@ export const INITIAL_EXAMS: Exam[] = [
     subjectId: 'sub-dbms',
     title: 'Database Systems (BACSE202)',
     examDate: '2026-11-21', // November 21
-    targetFinishDate: '2026-11-14',
-    revisionDaysBuffer: 7,
+    targetFinishDate: '2026-11-15',
+    revisionDaysBuffer: 6,
     priority: 'high',
   },
   {
@@ -275,7 +275,7 @@ export const INITIAL_EXAMS: Exam[] = [
   },
 ];
 
-// Generate structured day-by-day plan from Oct 12 to Nov 15
+// Generate structured day-by-day plan starting TODAY until Nov 13, covering 100% of syllabus
 export const generateDailyStudyTasks = (): StudyTask[] => {
   const tasks: StudyTask[] = [];
 
@@ -284,81 +284,57 @@ export const generateDailyStudyTasks = (): StudyTask[] => {
   const dbmsTopics = INITIAL_TOPICS.filter((t) => t.subjectId === 'sub-dbms');
   const cloudTopics = INITIAL_TOPICS.filter((t) => t.subjectId === 'sub-cloud');
 
-  // Days 0 to 32 (Oct 12 to Nov 13): 1 topic per subject daily!
-  for (let dayOffset = 0; dayOffset <= 32; dayOffset++) {
-    const curDate = addDays(startDate, dayOffset);
-    const dateStr = fmt(curDate);
+  // Days available for core topics: from today until Nov 13, 2026
+  const targetEndDate = parseISO('2026-11-13');
+  const daysAvailable = Math.max(1, differenceInCalendarDays(targetEndDate, today) + 1);
 
-    // OS slot: 09:00 AM (1 topic)
-    if (dayOffset < osTopics.length) {
-      const top = osTopics[dayOffset];
+  const distribute = (
+    topicList: Topic[],
+    subjectPrefix: string,
+    baseHour: number,
+    baseMinute: number,
+    durationMinutes: number
+  ) => {
+    const total = topicList.length;
+    topicList.forEach((topic, idx) => {
+      const dayOffset = Math.min(daysAvailable - 1, Math.floor((idx * daysAvailable) / total));
+      const taskDate = addDays(today, dayOffset);
+      const dateStr = fmt(taskDate);
+
+      const existingOnDay = tasks.filter((t) => t.date === dateStr && t.subjectId === topic.subjectId).length;
+      const startMinTotal = baseHour * 60 + baseMinute + existingOnDay * (durationMinutes + 10);
+      const sH = Math.floor(startMinTotal / 60);
+      const sM = startMinTotal % 60;
+      const startTime = `${String(sH).padStart(2, '0')}:${String(sM).padStart(2, '0')}`;
+
       tasks.push({
-        id: `plan-os-${top.id}`,
-        subjectId: 'sub-os',
-        topicId: top.id,
-        title: `OS [T${dayOffset + 1}]: ${top.title}`,
+        id: `plan-${topic.id}`,
+        subjectId: topic.subjectId,
+        topicId: topic.id,
+        title: `${subjectPrefix}: ${topic.title}`,
         date: dateStr,
-        startTime: '09:00',
-        durationMinutes: 75,
+        startTime,
+        durationMinutes,
         type: 'study',
         completed: false,
-        notes: `Complete notes and core concepts for ${top.title}`,
+        notes: `Topic ${idx + 1} of ${total}: Focus on syllabus concepts & exam questions`,
       });
-    }
+    });
+  };
 
-    // MOC slot: 11:30 AM (1 topic)
-    if (dayOffset < mocTopics.length) {
-      const top = mocTopics[dayOffset];
-      tasks.push({
-        id: `plan-moc-${top.id}`,
-        subjectId: 'sub-moc',
-        topicId: top.id,
-        title: `MOC [T${dayOffset + 1}]: ${top.title}`,
-        date: dateStr,
-        startTime: '11:30',
-        durationMinutes: 90,
-        type: 'study',
-        completed: false,
-        notes: `Solve example automata / derivations for ${top.title}`,
-      });
-    }
+  // 1. Morning Deep Work: Operating Systems (BACSE106) @ 09:00 AM
+  distribute(osTopics, 'OS', 9, 0, 50);
 
-    // DBMS slot: 02:30 PM (1 topic)
-    if (dayOffset < dbmsTopics.length) {
-      const top = dbmsTopics[dayOffset];
-      tasks.push({
-        id: `plan-dbms-${top.id}`,
-        subjectId: 'sub-dbms',
-        topicId: top.id,
-        title: `DBMS [T${dayOffset + 1}]: ${top.title}`,
-        date: dateStr,
-        startTime: '14:30',
-        durationMinutes: 75,
-        type: 'study',
-        completed: false,
-        notes: `Review schema rules & practice problems for ${top.title}`,
-      });
-    }
+  // 2. Midday Deep Work: Models of Computation (BACSE201) @ 11:30 AM
+  distribute(mocTopics, 'MOC', 11, 30, 55);
 
-    // Cloud slot: 05:00 PM (1 topic)
-    if (dayOffset < cloudTopics.length) {
-      const top = cloudTopics[dayOffset];
-      tasks.push({
-        id: `plan-cloud-${top.id}`,
-        subjectId: 'sub-cloud',
-        topicId: top.id,
-        title: `Cloud [T${dayOffset + 1}]: ${top.title}`,
-        date: dateStr,
-        startTime: '17:00',
-        durationMinutes: 60,
-        type: 'study',
-        completed: false,
-        notes: `Architectural diagrams & key definitions for ${top.title}`,
-      });
-    }
-  }
+  // 3. Afternoon Deep Work: Database Systems (BACSE202) @ 02:30 PM (14:30)
+  distribute(dbmsTopics, 'DBMS', 14, 30, 50);
 
-  // Days 33 to 34 (Nov 14 & Nov 15): Final comprehensive revision & mock exam practice
+  // 4. Evening Deep Work: Cloud Infrastructure (BACSE344) @ 05:00 PM (17:00)
+  distribute(cloudTopics, 'Cloud', 17, 0, 45);
+
+  // Days 14 & 15 (Nov 14 & Nov 15): Final comprehensive revision drills before exams
   tasks.push(
     {
       id: 'rev-day-1-os',
@@ -411,7 +387,7 @@ export const generateDailyStudyTasks = (): StudyTask[] => {
 
 export const INITIAL_TASKS: StudyTask[] = generateDailyStudyTasks();
 
-// Daily Habits & Routine (Gym, 5 AM wakeup, LeetCode, etc.)
+// Daily Habits & Routine (Gym, 5 AM wakeup, LeetCode, etc.) - Fresh start from today
 export const INITIAL_HABITS: DailyHabit[] = [
   {
     id: 'habit-wakeup',
@@ -419,8 +395,8 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'wakeup',
     time: '05:00 AM',
     icon: 'AlarmClock',
-    streak: 1,
-    completedDates: ['2026-10-12'],
+    streak: 0,
+    completedDates: [],
     details: 'Hydrate immediately with water, morning stretches & no phone distraction',
   },
   {
@@ -429,8 +405,8 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'gym',
     time: '06:00 AM',
     icon: 'Dumbbell',
-    streak: 1,
-    completedDates: ['2026-10-12'],
+    streak: 0,
+    completedDates: [],
     details: 'Strength training / Cardio session (75 mins) to energize the mind',
   },
   {
@@ -439,9 +415,9 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'leetcode',
     time: '07:30 AM',
     icon: 'Code2',
-    streak: 1,
-    completedDates: ['2026-10-12'],
-    details: 'Two Sum II / Array Two Pointers problem',
+    streak: 0,
+    completedDates: [],
+    details: 'Daily algorithm problem (Array, Two Pointers, Linked List)',
     difficulty: 'Medium',
     problemLink: 'https://leetcode.com/problemset/all/',
   },
@@ -451,7 +427,7 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'custom',
     time: '09:00 AM',
     icon: 'BookOpen',
-    streak: 1,
+    streak: 0,
     completedDates: [],
     details: 'Unbroken focus block for Operating Systems & Theory of Computation',
   },
@@ -461,7 +437,7 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'custom',
     time: '02:30 PM',
     icon: 'Layers',
-    streak: 1,
+    streak: 0,
     completedDates: [],
     details: 'Database design, query trees & Cloud architectures',
   },
@@ -471,8 +447,8 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'custom',
     time: 'All Day',
     icon: 'Droplet',
-    streak: 3,
-    completedDates: ['2026-10-10', '2026-10-11', '2026-10-12'],
+    streak: 0,
+    completedDates: [],
     details: 'Stay hydrated to maintain cognitive performance during study hours',
   },
   {
@@ -481,8 +457,8 @@ export const INITIAL_HABITS: DailyHabit[] = [
     category: 'custom',
     time: '10:30 PM',
     icon: 'Moon',
-    streak: 2,
-    completedDates: ['2026-10-10', '2026-10-11'],
+    streak: 0,
+    completedDates: [],
     details: 'Ensure 6.5 - 7 hours of restorative sleep to easily wake up at 5:00 AM',
   },
 ];

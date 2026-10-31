@@ -17,10 +17,11 @@ import {
   INITIAL_EXAMS,
   INITIAL_TASKS,
   INITIAL_HABITS,
+  generateDailyStudyTasks,
 } from '../data/seedData';
 import { format, isBefore, startOfDay, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 
-const STORAGE_KEY = 'study_sync_planner_v3';
+const STORAGE_KEY = 'study_sync_planner_v4';
 
 interface StudyStoreContextType {
   subjects: Subject[];
@@ -501,7 +502,7 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setModules(INITIAL_MODULES);
     setTopics(INITIAL_TOPICS);
     setExams(INITIAL_EXAMS);
-    setTasks(INITIAL_TASKS);
+    setTasks(generateDailyStudyTasks());
     setHabits(INITIAL_HABITS);
     setDailyStudyHoursGoal(4.0);
     localStorage.clear();
